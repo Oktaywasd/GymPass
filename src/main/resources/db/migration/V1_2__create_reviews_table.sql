@@ -11,6 +11,7 @@ CREATE TABLE reviews (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     -- İlişkiler (Foreign Keys)
+    -- Bu satırların çalışması için V1_0 ve V1_1 dosyalarının hazır olması gerekir
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
     FOREIGN KEY (gym_id) REFERENCES gyms(gym_id) ON DELETE CASCADE,
 
