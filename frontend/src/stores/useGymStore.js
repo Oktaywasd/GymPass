@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { 
-  sporSalonlari, 
-  egitmenler, 
-  filterSporSalonlari, 
+import api from '../services/api';
+import {
+  sporSalonlari,
+  egitmenler,
+  filterSporSalonlari,
   siralaSporSalonlari,
   getSporSalonuById,
-  getEgitmenlerBySporSalonu 
+  getEgitmenlerBySporSalonu
 } from '../data/mockData';
 
 const useGymStore = create(
@@ -110,18 +111,91 @@ const useGymStore = create(
       sporSalonlariniYukle: async () => {
         set({ yukleniyor: true, hata: null });
         try {
-          // Gerçek API çağrısı simülasyonu
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          set({ 
+          // Backend durumunu kontrol et
+          const isBackendOnline = await api.utils.isBackendOnline();
+          
+          if (isBackendOnline) {
+            // Backend online - sadece backend data'sını kullan
+            const backendGyms = await api.gym.getAllGyms();
+            
+            // Rastgele gym görselleri
+            const gymImages = [
+              "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=300&fit=crop",
+              "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&h=300&fit=crop",
+              "https://images.unsplash.com/photo-1540497077202-7c8a3999166f?w=400&h=300&fit=crop",
+              "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=300&fit=crop",
+              "https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=400&h=300&fit=crop",
+              "https://images.unsplash.com/photo-1593079831268-3381b0db4a77?w=400&h=300&fit=crop"
+            ];
+
+            // Backend verilerini frontend formatına çevir
+            const formattedGyms = backendGyms.map((gym, index) => ({
+              id: gym.id,
+              ad: gym.name,
+              aciklama: `${gym.name} - ${gym.location}`,
+              resim: gymImages[index % gymImages.length], // Rastgele görsel seç
+              konum: gym.location,
+              puan: Math.round((4.0 + Math.random() * 1) * 10) / 10, // 4.0-5.0 arası, 1 ondalık basamak
+              yorumSayisi: Math.floor(Math.random() * 100), // 0-99 arası rastgele yorum sayısı
+              saatlikUcret: Math.round(gym.pricePerMinute * 60), // Dakika -> Saat
+              ozellikler: ["Kardio", "Ağırlık", "Grup Dersleri"], // Default değerler
+              acilisSaati: "06:00",
+              kapanisSaati: "23:00",
+              musaitlik: "yuksek",
+              kategori: "standart",
+              telefon: "+90 212 555 0000",
+              adres: gym.location,
+              sosyalMedya: {
+                instagram: "@gym_" + gym.id,
+                facebook: "Gym" + gym.id
+              }
+            }));
+
+            set({
+              sporSalonlari: formattedGyms,
+              filtrelenmisSpor: formattedGyms,
+              yukleniyor: false,
+              hata: null
+            });
+          } else {
+            // Backend offline - sadece mock data'sını kullan
+            console.log('Backend offline, using mock data only');
+            set({
+              sporSalonlari: sporSalonlari,
+              filtrelenmisSpor: sporSalonlari,
+              hata: 'Backend offline - demo veriler gösteriliyor',
+              yukleniyor: false
+            });
+          }
+        } catch (error) {
+          console.error('Gym yükleme hatası:', error);
+          // Hata durumunda mock data'yı kullan
+          set({
             sporSalonlari: sporSalonlari,
             filtrelenmisSpor: sporSalonlari,
-            yukleniyor: false 
+            hata: 'Veri yükleme hatası - demo veriler gösteriliyor',
+            yukleniyor: false
           });
+        }
+      },
+
+      // Yeni gym oluştur
+      gymOlustur: async (gymData) => {
+        set({ yukleniyor: true, hata: null });
+        try {
+          const yeniGym = await api.gym.createGym(gymData);
+          
+          // Store'u güncelle
+          await get().sporSalonlariniYukle();
+          
+          return { basarili: true, gym: yeniGym };
         } catch (error) {
-          set({ 
-            hata: 'Spor salonları yüklenirken bir hata oluştu',
-            yukleniyor: false 
+          const hataMessaji = api.utils.formatError(error);
+          set({
+            hata: hataMessaji,
+            yukleniyor: false
           });
+          return { basarili: false, hata: hataMessaji };
         }
       },
       

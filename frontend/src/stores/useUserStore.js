@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
+import api from '../services/api';
 import { kullanicilar } from '../data/mockData';
 
 const useUserStore = create(
@@ -67,15 +68,48 @@ const useUserStore = create(
         // Async actions
         girisYap: async (email, sifre, kullaniciTuru = 'kullanici') => {
           set({ yukleniyor: true, hata: null });
-          try {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // Mock giriş kontrolü
+          
+          // Backend durumunu kontrol et
+          const backendOnline = await api.utils.isBackendOnline();
+          
+          if (backendOnline) {
+            try {
+              // Backend API ile giriş yap
+              const response = await api.auth.login({ email, password: sifre });
+              
+              const kullanici = {
+                id: response.id,
+                ad: response.name,
+                email: response.email,
+                balance: response.balance,
+                kullaniciTuru: kullaniciTuru
+              };
+              
+              set({
+                kullanici: kullanici,
+                girisYapildi: true,
+                kullaniciTuru: kullaniciTuru,
+                yukleniyor: false
+              });
+              
+              return { basarili: true, kullanici };
+            } catch (error) {
+              console.error('Backend giriş hatası:', error);
+              const hataMessaji = api.utils.formatError(error);
+              set({
+                hata: hataMessaji,
+                yukleniyor: false
+              });
+              return { basarili: false, hata: hataMessaji };
+            }
+          } else {
+            // Backend offline - Mock giriş kontrolü
             if (email === 'demo@gympass.com' && sifre === '123456') {
               const mockKullanici = {
                 id: 1,
                 ad: 'Demo Kullanıcı',
                 email: email,
+                balance: 1000,
                 kullaniciTuru: kullaniciTuru
               };
               
@@ -86,32 +120,64 @@ const useUserStore = create(
                 yukleniyor: false
               });
               
-              return { basarili: true };
+              return { basarili: true, kullanici: mockKullanici };
             } else {
               set({
-                hata: 'Geçersiz email veya şifre',
+                hata: 'Geçersiz giriş bilgileri (Backend offline - demo hesabı kullanın)',
                 yukleniyor: false
               });
-              return { basarili: false, hata: 'Geçersiz email veya şifre' };
+              return { basarili: false, hata: 'Geçersiz giriş bilgileri' };
             }
-          } catch (error) {
-            set({
-              hata: 'Giriş yapılırken bir hata oluştu',
-              yukleniyor: false
-            });
-            return { basarili: false, hata: error.message };
           }
         },
         
         kayitOl: async (kayitBilgileri) => {
           set({ yukleniyor: true, hata: null });
-          try {
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            
+          
+          // Backend durumunu kontrol et
+          const backendOnline = await api.utils.isBackendOnline();
+          
+          if (backendOnline) {
+            try {
+              // Backend API ile kayıt ol
+              const response = await api.auth.register({
+                name: kayitBilgileri.ad,
+                email: kayitBilgileri.email,
+                password: kayitBilgileri.sifre
+              });
+              
+              const yeniKullanici = {
+                id: response.id,
+                ad: response.name,
+                email: response.email,
+                balance: response.balance,
+                kullaniciTuru: kayitBilgileri.kullaniciTuru || 'kullanici'
+              };
+              
+              set({
+                kullanici: yeniKullanici,
+                girisYapildi: true,
+                kullaniciTuru: kayitBilgileri.kullaniciTuru || 'kullanici',
+                yukleniyor: false
+              });
+              
+              return { basarili: true, kullanici: yeniKullanici };
+            } catch (error) {
+              console.error('Backend kayıt hatası:', error);
+              const hataMessaji = api.utils.formatError(error);
+              set({
+                hata: hataMessaji,
+                yukleniyor: false
+              });
+              return { basarili: false, hata: hataMessaji };
+            }
+          } else {
+            // Backend offline - Mock kayıt
             const yeniKullanici = {
               id: Date.now(),
               ad: kayitBilgileri.ad,
               email: kayitBilgileri.email,
+              balance: 1000,
               kullaniciTuru: kayitBilgileri.kullaniciTuru || 'kullanici'
             };
             
@@ -122,17 +188,14 @@ const useUserStore = create(
               yukleniyor: false
             });
             
-            return { basarili: true };
-          } catch (error) {
-            set({
-              hata: 'Kayıt olurken bir hata oluştu',
-              yukleniyor: false
-            });
-            return { basarili: false, hata: error.message };
+            return { basarili: true, kullanici: yeniKullanici };
           }
         },
         
         cikisYap: () => {
+          // Backend'den çıkış yap
+          api.auth.logout();
+          
           set({
             kullanici: null,
             girisYapildi: false,

@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  MagnifyingGlassIcon, 
+import {
+  MagnifyingGlassIcon,
   AdjustmentsHorizontalIcon,
   Bars3Icon,
-  UserCircleIcon
+  UserCircleIcon,
+  BuildingStorefrontIcon,
+  UserGroupIcon,
+  CreditCardIcon,
+  ClockIcon,
+  Cog6ToothIcon
 } from '@heroicons/react/24/outline';
 
 // Components
@@ -13,6 +18,16 @@ import ReservationModal from './components/reservation/ReservationModal';
 import Button from './components/ui/Button';
 import Input from './components/ui/Input';
 import Card from './components/ui/Card';
+
+// Auth Components
+import LoginModal from './components/auth/LoginModal';
+import RegisterModal from './components/auth/RegisterModal';
+
+// New Backend Integration Components
+import GymManagement from './components/gym/GymManagement';
+import JoinRequests from './components/gym/JoinRequests';
+import PaymentProcess from './components/payment/PaymentProcess';
+import SessionManagement from './components/session/SessionManagement';
 
 // Stores
 import useGymStore from './stores/useGymStore';
@@ -25,6 +40,9 @@ import { getSporSalonuById } from './data/mockData';
 function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('gyms'); // 'gyms', 'management', 'requests', 'sessions', 'payments'
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [registerModalOpen, setRegisterModalOpen] = useState(false);
   
   const {
     filtrelenmisSpor,
@@ -40,7 +58,7 @@ function App() {
   } = useGymStore();
   
   const { setRezervasyonModalAcik, setRezervasyonFormu } = useReservationStore();
-  const { kullanici, girisYapildi } = useUserStore();
+  const { kullanici, girisYapildi, cikisYap } = useUserStore();
   
   // Uygulama başlatıldığında spor salonlarını yükle
   useEffect(() => {
@@ -109,14 +127,25 @@ function App() {
                     variant="ghost"
                     size="sm"
                     icon={<UserCircleIcon className="w-6 h-6" />}
-                  />
+                    onClick={cikisYap}
+                  >
+                    <span className="hidden sm:inline">Çıkış</span>
+                  </Button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setLoginModalOpen(true)}
+                  >
                     Giriş Yap
                   </Button>
-                  <Button variant="primary" size="sm">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setRegisterModalOpen(true)}
+                  >
                     Kayıt Ol
                   </Button>
                 </div>
@@ -146,55 +175,119 @@ function App() {
         </div>
       </header>
       
+      {/* Tab Navigation */}
+      <div className="bg-white border-b border-gray-200 sticky top-16 z-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="-mb-px flex space-x-8 overflow-x-auto">
+            <TabButton
+              active={activeTab === 'gyms'}
+              onClick={() => setActiveTab('gyms')}
+              icon={<MagnifyingGlassIcon className="w-5 h-5" />}
+              label="Gym Ara"
+            />
+            <TabButton
+              active={activeTab === 'management'}
+              onClick={() => setActiveTab('management')}
+              icon={<BuildingStorefrontIcon className="w-5 h-5" />}
+              label="Gym Yönetimi"
+            />
+            <TabButton
+              active={activeTab === 'requests'}
+              onClick={() => setActiveTab('requests')}
+              icon={<UserGroupIcon className="w-5 h-5" />}
+              label="Katılma İstekleri"
+            />
+            <TabButton
+              active={activeTab === 'sessions'}
+              onClick={() => setActiveTab('sessions')}
+              icon={<ClockIcon className="w-5 h-5" />}
+              label="Seans Yönetimi"
+            />
+            <TabButton
+              active={activeTab === 'payments'}
+              onClick={() => setActiveTab('payments')}
+              icon={<CreditCardIcon className="w-5 h-5" />}
+              label="Ödemeler"
+            />
+          </nav>
+        </div>
+      </div>
+
       {/* Ana İçerik */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex gap-8">
-          {/* Filtre Paneli - Desktop */}
-          <aside className={`
-            w-80 flex-shrink-0 hidden lg:block
-            ${filterPanelOpen ? 'block' : 'hidden'}
-          `}>
-            <FilterPanel />
-          </aside>
-          
-          {/* Grid İçeriği */}
-          <div className="flex-1">
-            {/* Sonuç Başlığı */}
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">
-                  Spor Salonları
-                </h2>
-                <p className="text-gray-600 mt-1">
-                  {filtrelenmisSpor.length} sonuç bulundu
-                </p>
+        {activeTab === 'gyms' && (
+          <div className="flex gap-8">
+            {/* Filtre Paneli - Desktop */}
+            <aside className={`
+              w-80 flex-shrink-0 hidden lg:block
+              ${filterPanelOpen ? 'block' : 'hidden'}
+            `}>
+              <FilterPanel />
+            </aside>
+            
+            {/* Grid İçeriği */}
+            <div className="flex-1">
+              {/* Sonuç Başlığı */}
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    Spor Salonları
+                  </h2>
+                  <p className="text-gray-600 mt-1">
+                    {filtrelenmisSpor.length} sonuç bulundu
+                  </p>
+                </div>
+                
+                {/* Sıralama */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Sırala:</span>
+                  <select
+                    value={siralama}
+                    onChange={(e) => setSiralama(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="puan-desc">En Yüksek Puan</option>
+                    <option value="puan-asc">En Düşük Puan</option>
+                    <option value="ucret-asc">En Uygun Fiyat</option>
+                    <option value="ucret-desc">En Yüksek Fiyat</option>
+                    <option value="yorum-desc">En Çok Yorumlanan</option>
+                  </select>
+                </div>
               </div>
               
-              {/* Sıralama */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Sırala:</span>
-                <select
-                  value={siralama}
-                  onChange={(e) => setSiralama(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="puan-desc">En Yüksek Puan</option>
-                  <option value="puan-asc">En Düşük Puan</option>
-                  <option value="ucret-asc">En Uygun Fiyat</option>
-                  <option value="ucret-desc">En Yüksek Fiyat</option>
-                  <option value="yorum-desc">En Çok Yorumlanan</option>
-                </select>
-              </div>
+              {/* Masonry Grid */}
+              <MasonryGrid onCardClick={handleCardClick} />
             </div>
-            
-            {/* Masonry Grid */}
-            <MasonryGrid onCardClick={handleCardClick} />
           </div>
-        </div>
+        )}
+
+        {activeTab === 'management' && <GymManagement />}
+        {activeTab === 'requests' && <JoinRequests />}
+        {activeTab === 'sessions' && <SessionManagement />}
+        {activeTab === 'payments' && <PaymentProcess />}
       </main>
       
       {/* Rezervasyon Modal */}
       <ReservationModal />
+      
+      {/* Auth Modals */}
+      <LoginModal
+        isOpen={loginModalOpen}
+        onClose={() => setLoginModalOpen(false)}
+        onSwitchToRegister={() => {
+          setLoginModalOpen(false);
+          setRegisterModalOpen(true);
+        }}
+      />
+      
+      <RegisterModal
+        isOpen={registerModalOpen}
+        onClose={() => setRegisterModalOpen(false)}
+        onSwitchToLogin={() => {
+          setRegisterModalOpen(false);
+          setLoginModalOpen(true);
+        }}
+      />
       
       {/* Mobile Filtre Overlay */}
       {mobileMenuOpen && (
@@ -355,6 +448,25 @@ const FilterPanel = () => {
         </div>
       </div>
     </Card>
+  );
+};
+
+// Tab Button Bileşeni
+const TabButton = ({ active, onClick, icon, label }) => {
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors
+        ${active
+          ? 'border-blue-500 text-blue-600'
+          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+        }
+      `}
+    >
+      {icon}
+      <span className="hidden sm:inline">{label}</span>
+    </button>
   );
 };
 

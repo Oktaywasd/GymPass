@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import api from '../services/api';
 import { rezervasyonlar, getRezervasyonlarByKullanici } from '../data/mockData';
 
 const useReservationStore = create(
@@ -62,18 +63,53 @@ const useReservationStore = create(
       // Async actions
       kullaniciRezervasyonlariniYukle: async (kullaniciId) => {
         set({ yukleniyor: true, hata: null });
-        try {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          const kullaniciRezervasyonlari = getRezervasyonlarByKullanici(kullaniciId);
-          set({ 
-            kullaniciRezervasyonlari,
-            yukleniyor: false 
-          });
-        } catch (error) {
-          set({ 
-            hata: 'Rezervasyonlar yüklenirken bir hata oluştu',
-            yukleniyor: false 
-          });
+        
+        // Backend durumunu kontrol et
+        const backendOnline = await api.utils.isBackendOnline();
+        
+        if (backendOnline) {
+          try {
+            // Backend API'den kullanıcı rezervasyonlarını al
+            const response = await api.session.getUserSessions(kullaniciId);
+            const kullaniciRezervasyonlari = response.map(session => ({
+              id: session.id,
+              kullaniciId: session.userId,
+              sporSalonuId: session.gymId,
+              tarih: session.sessionDate,
+              saat: session.startTime,
+              sure: session.duration || 60,
+              durum: session.status === 'ACTIVE' ? 'onaylandi' :
+                     session.status === 'COMPLETED' ? 'tamamlandi' : 'beklemede',
+              ucret: session.price,
+              olusturmaTarihi: session.createdAt
+            }));
+            
+            set({
+              kullaniciRezervasyonlari,
+              yukleniyor: false
+            });
+          } catch (error) {
+            console.error('Backend rezervasyon yükleme hatası:', error);
+            set({
+              hata: api.utils.formatError(error),
+              yukleniyor: false
+            });
+          }
+        } else {
+          // Backend offline - Mock data kullan
+          try {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const kullaniciRezervasyonlari = getRezervasyonlarByKullanici(kullaniciId);
+            set({
+              kullaniciRezervasyonlari,
+              yukleniyor: false
+            });
+          } catch (error) {
+            set({
+              hata: 'Rezervasyonlar yüklenirken bir hata oluştu',
+              yukleniyor: false
+            });
+          }
         }
       },
       
@@ -112,67 +148,141 @@ const useReservationStore = create(
       
       rezervasyonOlustur: async (rezervasyonVerisi) => {
         set({ yukleniyor: true, hata: null });
-        try {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          const yeniRezervasyonId = Math.max(...get().rezervasyonlar.map(r => r.id)) + 1;
-          const yeniRezervasyonTarihi = new Date().toISOString();
-          
-          const yeniRezervasyonObj = {
-            id: yeniRezervasyonId,
-            kullaniciId: 1, // Şu an sabit, gerçek uygulamada auth'dan gelecek
-            sporSalonuId: rezervasyonVerisi.sporSalonuId,
-            egitmenId: rezervasyonVerisi.egitmenId,
-            tarih: rezervasyonVerisi.tarih,
-            saat: rezervasyonVerisi.saat,
-            sure: rezervasyonVerisi.sure,
-            durum: 'beklemede',
-            ucret: rezervasyonVerisi.ucret,
-            notlar: rezervasyonVerisi.notlar || '',
-            olusturmaTarihi: yeniRezervasyonTarihi
-          };
-          
-          const guncelRezervasyonlar = [...get().rezervasyonlar, yeniRezervasyonObj];
-          set({ 
-            rezervasyonlar: guncelRezervasyonlar,
-            yukleniyor: false,
-            rezervasyonModalAcik: false
-          });
-          
-          // Formu temizle
-          get().rezervasyonFormunuTemizle();
-          
-          return { basarili: true, rezervasyonId: yeniRezervasyonId };
-        } catch (error) {
-          set({ 
-            hata: 'Rezervasyon oluşturulurken bir hata oluştu',
-            yukleniyor: false 
-          });
-          return { basarili: false, hata: error.message };
+        
+        // Backend durumunu kontrol et
+        const backendOnline = await api.utils.isBackendOnline();
+        
+        if (backendOnline) {
+          try {
+            // Kullanıcı ID'sini al (useUserStore'dan)
+            const kullaniciId = 1; // Şimdilik sabit, gerçek uygulamada auth'dan gelecek
+            
+            // Backend API ile katılma isteği oluştur
+            const response = await api.joinRequest.sendJoinRequest({
+              userId: kullaniciId,
+              gymId: rezervasyonVerisi.sporSalonuId,
+              message: `Tarih: ${rezervasyonVerisi.tarih}, Saat: ${rezervasyonVerisi.saat}, Süre: ${rezervasyonVerisi.sure} dakika. ${rezervasyonVerisi.notlar || ''}`
+            });
+            
+            const yeniRezervasyonObj = {
+              id: response.id,
+              kullaniciId: response.userId,
+              sporSalonuId: response.gymId,
+              tarih: rezervasyonVerisi.tarih,
+              saat: rezervasyonVerisi.saat,
+              sure: rezervasyonVerisi.sure,
+              durum: 'beklemede', // Join request başlangıçta beklemede
+              ucret: rezervasyonVerisi.ucret,
+              notlar: rezervasyonVerisi.notlar || '',
+              olusturmaTarihi: response.createdAt,
+              mesaj: response.message
+            };
+            
+            const guncelRezervasyonlar = [...get().rezervasyonlar, yeniRezervasyonObj];
+            set({
+              rezervasyonlar: guncelRezervasyonlar,
+              yukleniyor: false
+            });
+            
+            return { basarili: true, rezervasyonId: response.id };
+          } catch (error) {
+            console.error('Backend rezervasyon oluşturma hatası:', error);
+            set({
+              hata: api.utils.formatError(error),
+              yukleniyor: false
+            });
+            return { basarili: false, hata: api.utils.formatError(error) };
+          }
+        } else {
+          // Backend offline - Mock rezervasyon oluştur
+          try {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            const yeniRezervasyonId = Math.max(...get().rezervasyonlar.map(r => r.id)) + 1;
+            const yeniRezervasyonTarihi = new Date().toISOString();
+            
+            const yeniRezervasyonObj = {
+              id: yeniRezervasyonId,
+              kullaniciId: 1, // Mock kullanıcı ID
+              sporSalonuId: rezervasyonVerisi.sporSalonuId,
+              egitmenId: rezervasyonVerisi.egitmenId,
+              tarih: rezervasyonVerisi.tarih,
+              saat: rezervasyonVerisi.saat,
+              sure: rezervasyonVerisi.sure,
+              durum: 'beklemede',
+              ucret: rezervasyonVerisi.ucret,
+              notlar: rezervasyonVerisi.notlar || '',
+              olusturmaTarihi: yeniRezervasyonTarihi
+            };
+            
+            const guncelRezervasyonlar = [...get().rezervasyonlar, yeniRezervasyonObj];
+            set({
+              rezervasyonlar: guncelRezervasyonlar,
+              yukleniyor: false
+            });
+            
+            return { basarili: true, rezervasyonId: yeniRezervasyonId };
+          } catch (error) {
+            set({
+              hata: 'Rezervasyon oluşturulurken bir hata oluştu',
+              yukleniyor: false
+            });
+            return { basarili: false, hata: error.message };
+          }
         }
       },
       
       rezervasyonIptalEt: async (rezervasyonId) => {
         set({ yukleniyor: true, hata: null });
-        try {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          
-          const guncelRezervasyonlar = get().rezervasyonlar.map(r =>
-            r.id === rezervasyonId ? { ...r, durum: 'iptal' } : r
-          );
-          
-          set({ 
-            rezervasyonlar: guncelRezervasyonlar,
-            yukleniyor: false 
-          });
-          
-          return { basarili: true };
-        } catch (error) {
-          set({ 
-            hata: 'Rezervasyon iptal edilirken bir hata oluştu',
-            yukleniyor: false 
-          });
-          return { basarili: false, hata: error.message };
+        
+        // Backend durumunu kontrol et
+        const backendOnline = await api.utils.isBackendOnline();
+        
+        if (backendOnline) {
+          try {
+            // Backend API ile rezervasyon iptal et
+            await api.session.endSession(rezervasyonId);
+            
+            const guncelRezervasyonlar = get().rezervasyonlar.map(r =>
+              r.id === rezervasyonId ? { ...r, durum: 'iptal' } : r
+            );
+            
+            set({
+              rezervasyonlar: guncelRezervasyonlar,
+              yukleniyor: false
+            });
+            
+            return { basarili: true };
+          } catch (error) {
+            console.error('Backend rezervasyon iptal hatası:', error);
+            set({
+              hata: api.utils.formatError(error),
+              yukleniyor: false
+            });
+            return { basarili: false, hata: api.utils.formatError(error) };
+          }
+        } else {
+          // Backend offline - Mock iptal
+          try {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            const guncelRezervasyonlar = get().rezervasyonlar.map(r =>
+              r.id === rezervasyonId ? { ...r, durum: 'iptal' } : r
+            );
+            
+            set({
+              rezervasyonlar: guncelRezervasyonlar,
+              yukleniyor: false
+            });
+            
+            return { basarili: true };
+          } catch (error) {
+            set({
+              hata: 'Rezervasyon iptal edilirken bir hata oluştu',
+              yukleniyor: false
+            });
+            return { basarili: false, hata: error.message };
+          }
         }
       },
       

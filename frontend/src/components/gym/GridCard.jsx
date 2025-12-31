@@ -180,7 +180,7 @@ const GridCard = ({ sporSalonu, onCardClick, className = '' }) => {
               onClick={handleQuickReservation}
               icon={<CalendarIcon className="w-4 h-4" />}
             >
-              Hızlı Rezervasyon
+              Katılma İsteği
             </Button>
           </motion.div>
         </div>
